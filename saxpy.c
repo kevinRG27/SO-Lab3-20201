@@ -132,18 +132,18 @@ int main(int argc, char* argv[]){
 	//SAXPY iterative SAXPY mfunction
 	for(it = 0; it < max_iters; it++){
 		//Ciclo para la creación de los n hilos
-		for (i = 0; i <n_threads; i++){
-			params[i].init=i*spt;
-			if((i+1)!=n_threads){
-				params[i].end=(i+1)*spt;
+		for (i = 0; i < n_threads; i++){
+			params[i].init = i*spt;
+			if((i+1) != n_threads){
+				params[i].end = (i+1)*spt;
 			}else{
-				params[i].end=p+1;
+				params[i].end = p+1;
 			}
-			params[i].it=it;
-			params[i].p=p;
+			params[i].it = it;
+			params[i].p = p;
 			pthread_create(&threads[i],NULL,compute, &params[i]);
 		}
-	       	for (i = 0; i <n_threads; i++){
+	       	for (i = 0; i < n_threads; i++){
 			pthread_join(threads[i], NULL);
 		}
 	}
@@ -169,15 +169,15 @@ int main(int argc, char* argv[]){
 //Función que es ejecutada por los hilos
 void* compute(void *args){
 	 param_t *param = (param_t *)args;
-	 int i= param->init;
-	 int end = param->end;
-	 int it = param->it;
-	 int p = param->p;
+	 int i = param -> init;
+	 int end = param -> end;
+	 int it = param -> it;
+	 int p = param -> p;
 	 //Variable local para optimizar el calculo del promedio
 	 double acum = 0.0;
 
 	 while(i<end){
-		Y[i] =Y[i] + a * X[i];
+		Y[i] = Y[i] + a * X[i];
 		acum += Y[i];
 		i++;
 	}
