@@ -9,6 +9,7 @@
  * @param[in] <-i> {maximum itertions} 
  *
  * @author     Danny Munera
+ * 			   Kevin Restrepo Garcia & Carlos Andres Gomez
  * @date       2020
  */
 
@@ -17,19 +18,35 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <sys/time.h>
+#include <pthread.h>
+#include <semaphore.h> 
+
+//Firma del método que modela la instrucción Saxpy
+void *compute(void *);
+
+//Semaforo para proteger la región crítica 
+sem_t mutex;
+
+//Definición de variables globales
+double *X, *Y, *Y_avgs;
+double a;
+
+//Estructura para pasar los parametros de cada hilo
+typedef struct _param{
+	int init;
+	int end;
+	int it;
+	int p;
+}param_t;
 
 int main(int argc, char* argv[]){
 	// Variables to obtain command line parameters
 	unsigned int seed = 1;
   	int p = 10000000;
   	int n_threads = 2;
-  	int max_iters = 1000;
-  	// Variables to perform SAXPY operation
-	double* X;
-	double a;
-	double* Y;
-	double* Y_avgs;
-	int i, it;
+  	int max_iters = 1;
+	//
+	int i,it;
 	// Variables to get execution time
 	struct timeval t_start, t_end;
 	double exec_time;
@@ -82,19 +99,63 @@ int main(int argc, char* argv[]){
 	}
 	a = (double)rand() / RAND_MAX;
 
+#ifdef DEBUG
+	printf("vector X= [ ");
+	for(i = 0; i < p-1; i++){
+		printf("%f, ",X[i]);
+	}
+	printf("%f ]\n",X[p-1]);
+
+	printf("vector Y= [ ");
+	for(i = 0; i < p-1; i++){
+		printf("%f, ", Y[i]);
+	}
+	printf("%f ]\n", Y[p-1]);
+
+	printf("a= %f \n", a);	
+#endif
+
 	/*
 	 *	Function to parallelize 
 	 */
 	gettimeofday(&t_start, NULL);
+
+	//Calculo de porciones asignadas a cada hilo (section per thread-> spt)
+	int spt = p/n_threads;
+	//Inicialización del semaforo, al ser de tipo binario se inicializa en 1
+	sem_init(&mutex, 0, 1);
+	//Vector para almacenar n hilos
+	pthread_t threads[n_threads];
+	//Vector para almacenar los argumentos a pasar a n hilos
+	param_t params[n_threads];
+
 	//SAXPY iterative SAXPY mfunction
-	for(it = 0; it++ < max_iters; it++){
-		for(i = 0; i < p; i++){
-			Y[i] = Y[i] + a * X[i];
-			Y_avgs[it] += Y[i];
+	for(it = 0; it < max_iters; it++){
+		//Ciclo para la creación de los n hilos
+		for (i = 0; i <n_threads; i++){
+			params[i].init=i*spt;
+			if((i+1)!=n_threads){
+				params[i].end=(i+1)*spt;
+			}else{
+				params[i].end=p+1;
+			}
+			params[i].it=it;
+			params[i].p=p;
+			pthread_create(&threads[i],NULL,compute, &params[i]);
 		}
-		Y_avgs[it] = Y_avgs[it] / p;
+	       	for (i = 0; i <n_threads; i++){
+			pthread_join(threads[i], NULL);
+		}
 	}
 	gettimeofday(&t_end, NULL);
+
+#ifdef DEBUG
+	printf("RES: final vector Y= [ ");
+	for(i = 0; i < p-1; i++){
+		printf("%f, ", Y[i]);
+	}
+	printf("%f ]\n", Y[p-1]);
+#endif
 	
 	// Computing execution time
 	exec_time = (t_end.tv_sec - t_start.tv_sec) * 1000.0;  // sec to ms
@@ -103,4 +164,26 @@ int main(int argc, char* argv[]){
 	printf("Last 3 values of Y: %f, %f, %f \n", Y[p-3], Y[p-2], Y[p-1]);
 	printf("Last 3 values of Y_avgs: %f, %f, %f \n", Y_avgs[max_iters-3], Y_avgs[max_iters-2], Y_avgs[max_iters-1]);
 	return 0;
-}	
+}
+
+//Función que es ejecutada por los hilos
+void* compute(void *args){
+	 param_t *param = (param_t *)args;
+	 int i= param->init;
+	 int end = param->end;
+	 int it = param->it;
+	 int p = param->p;
+	 //Variable local para optimizar el calculo del promedio
+	 double acum = 0.0;
+
+	 while(i<end){
+		Y[i] =Y[i] + a * X[i];
+		acum += Y[i];
+		i++;
+	}
+	 sem_wait(&mutex);
+	 //Sección crítica protegida por el semaforo
+	 Y_avgs[it] += acum / p;
+	 sem_post(&mutex);
+	 pthread_exit(NULL);
+}
